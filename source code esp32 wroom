@@ -1,0 +1,276 @@
+/*
+ * Project Name : ESP32 Gas / Vacuum Chamber Controller
+ * Author        : <chiranjee veer singh>
+ * Platform      : Custom ESP32 Development Board
+ * MCU          : ESP32-WROOM-32
+ *
+ * Description:
+ * This project implements a complete gas/vacuum chamber control system
+ * using a custom-designed ESP32 development board. The board integrates
+ * all required peripherals, including power regulation, relay driver,
+ * and sensor interfaces, making it a standalone solution.
+ *
+ * Sensors Used:
+ * - DHT22: Measures temperature and humidity inside the chamber
+ * - Oxygen (O₂) Sensor: Measures oxygen concentration in percentage
+ * - Pressure Sensor (4–20mA): Measures chamber pressure via shunt resistor
+ *
+ * Hardware Features:
+ * - Onboard relay for vacuum pump/gas valve control
+ * - 9V to 5V onboard power regulation
+ * - ESP32 3.3V regulated supply
+ * - Dedicated ADC inputs for analog sensors
+ * - Push buttons for user interaction (UP / DOWN / OK / BACK)
+ * - Buzzer for key press feedback
+ * - I2C interface for 16x4 LCD display
+ *
+ * Functional Overview:
+ * - Real-time pressure, oxygen, temperature, and humidity monitoring
+ * - Manual vacuum chamber ON/OFF control
+ * - Set-pressure mode with automatic relay control
+ * - Relay turns OFF when actual pressure equals set pressure
+ * - Continuous real-time sensor updates (non-blocking)
+ *
+ * Communication:
+ * - Serial Monitor for debugging and testing
+ * - I2C for LCD (SDA: 21, SCL: 22)
+ *
+ * Notes:
+ * - Designed for industrial and laboratory gas chamber applications
+ * - ADC readings are averaged for noise reduction
+ * - Pressure conversion is based on a calibrated 4–20mA input
+ *
+ * License:
+ * Open-source / Personal / Educational use
+ */
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 4);
+
+#define BTN_OK     35
+#define BTN_BACK   32
+#define BTN_UP     33
+#define BTN_DOWN   25
+#define RELAY_VACUUM    14
+#define RELAY_PRESSURE  27
+#define BUZZER_PIN      23
+#define PRESSURE_ADC_PIN   39
+#define SHUNT_RESISTOR     120.0
+#define PRESSURE_MAX_KPA   20.0
+#define LOOP_MIN_MA        4.0
+#define LOOP_MAX_MA        20.0
+#define O2_PIN            36
+#define O2_AIR_PERCENT    20.9
+#define O2_AIR_VOLTAGE    0.394
+#define DHTPIN            4
+#define DHTTYPE           DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+enum Screen { HOME, VACUUM, SET_PRESSURE, MONITOR };
+Screen currentScreen = HOME;
+
+int menuIndex = 0;
+bool vacuumRelayState = false;
+
+int setPressure = 0;      
+int actualPressure = 0;  
+
+float oxygen = 0.0;
+float humidity = 0.0;
+
+unsigned long lastBtnTime = 0;
+unsigned long lastPressureRead = 0;
+unsigned long lastDHTRead = 0;
+
+bool lastOK = HIGH, lastBACK = HIGH, lastUP = HIGH, lastDOWN = HIGH;
+
+void beep() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delayMicroseconds(30000);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+int readPressure_mbar() {
+  const int samples = 20;
+  long sum = 0;
+
+  for (int i = 0; i < samples; i++) {
+    sum += analogRead(PRESSURE_ADC_PIN);
+    delayMicroseconds(150);
+  }
+
+  float adc = sum / (float)samples;
+  float voltage = (adc / 4095.0) * 3.3;
+  float current_mA = (voltage / SHUNT_RESISTOR) * 1000.0;
+
+  current_mA = constrain(current_mA, LOOP_MIN_MA, LOOP_MAX_MA);
+
+  float pressure_kPa =
+      (current_mA - LOOP_MIN_MA) *
+      (PRESSURE_MAX_KPA / (LOOP_MAX_MA - LOOP_MIN_MA));
+
+  return (int)(pressure_kPa * 10.0);   // → mbar
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(BTN_OK, INPUT_PULLUP);
+  pinMode(BTN_BACK, INPUT_PULLUP);
+  pinMode(BTN_UP, INPUT_PULLUP);
+  pinMode(BTN_DOWN, INPUT_PULLUP);
+
+  pinMode(RELAY_VACUUM, OUTPUT);
+  pinMode(RELAY_PRESSURE, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  Wire.begin(21, 22);
+  lcd.init();
+  lcd.backlight();
+
+  dht.begin();
+  analogReadResolution(12);
+
+  lcd.clear();
+  showHome();
+}
+
+void loop() {
+  readButtons();
+  unsigned long now = millis();
+
+  if (currentScreen == MONITOR && now - lastPressureRead >= 300) {
+    actualPressure = readPressure_mbar();
+    lastPressureRead = now;
+
+    if (actualPressure < setPressure && setPressure > 0) {
+      digitalWrite(RELAY_PRESSURE, HIGH);  
+    } else {
+      digitalWrite(RELAY_PRESSURE, LOW);    
+    }
+
+    refreshMonitor();
+  }
+
+  if (now - lastDHTRead >= 2000) {
+    readSensors();
+    lastDHTRead = now;
+  }
+}
+
+void readButtons() {
+  if (millis() - lastBtnTime < 120) return;
+
+  bool ok = digitalRead(BTN_OK);
+  bool back = digitalRead(BTN_BACK);
+  bool up = digitalRead(BTN_UP);
+  bool down = digitalRead(BTN_DOWN);
+
+  if (ok == LOW && lastOK == HIGH)   { beep(); handleOK(); }
+  if (back == LOW && lastBACK == HIGH){ beep(); handleBACK(); }
+  if (up == LOW && lastUP == HIGH)   { beep(); handleUP(); }
+  if (down == LOW && lastDOWN == HIGH){ beep(); handleDOWN(); }
+
+  lastOK = ok;
+  lastBACK = back;
+  lastUP = up;
+  lastDOWN = down;
+
+  lastBtnTime = millis();
+}
+
+void handleOK() {
+  if (currentScreen == HOME)
+    currentScreen = menuIndex == 0 ? VACUUM : SET_PRESSURE;
+
+  else if (currentScreen == VACUUM) {
+    vacuumRelayState = !vacuumRelayState;
+    digitalWrite(RELAY_VACUUM, vacuumRelayState);
+  }
+
+  else if (currentScreen == SET_PRESSURE) {
+    currentScreen = MONITOR;
+  }
+
+  redraw();
+}
+
+void handleBACK() {
+  digitalWrite(RELAY_PRESSURE, LOW);
+  digitalWrite(RELAY_VACUUM, LOW);
+  vacuumRelayState = false;
+  currentScreen = HOME;
+  redraw();
+}
+
+void handleUP() {
+  if (currentScreen == HOME) menuIndex ^= 1;
+  else if (currentScreen == SET_PRESSURE) setPressure = min(setPressure + 1, 200);
+  redraw();
+}
+
+void handleDOWN() {
+  if (currentScreen == HOME) menuIndex ^= 1;
+  else if (currentScreen == SET_PRESSURE) setPressure = max(setPressure - 1, 0);
+  redraw();
+}
+
+void readSensors() {
+  float v = analogRead(O2_PIN) * 3.3 / 4095.0;
+  oxygen = constrain((v / O2_AIR_VOLTAGE) * O2_AIR_PERCENT, 0, 25);
+
+  float h = dht.readHumidity();
+  if (!isnan(h)) humidity = h;
+}
+
+void redraw() {
+  lcd.clear();
+  if (currentScreen == HOME) showHome();
+  else if (currentScreen == VACUUM) showVacuum();
+  else if (currentScreen == SET_PRESSURE) showSetPressure();
+  else if (currentScreen == MONITOR) showMonitor();
+}
+
+void refreshMonitor() {
+  lcd.setCursor(5, 1);
+  lcd.print(setPressure); lcd.print(" mbar ");
+
+  lcd.setCursor(5, 2);
+  lcd.print(actualPressure); lcd.print(" mbar ");
+
+  lcd.setCursor(0, 3);
+  lcd.print("O2:");
+  lcd.print(oxygen,1);
+  lcd.print("% H:");
+  lcd.print(humidity,0);
+  lcd.print("% ");
+}
+
+void showHome() {
+  lcd.setCursor(0,0); lcd.print(" SMART CHAMBER ");
+  lcd.setCursor(0,1); lcd.print(menuIndex ? "  Vacuum Mode" : "> Vacuum Mode");
+  lcd.setCursor(0,2); lcd.print(menuIndex ? "> Set Pressure" : "  Set Pressure");
+}
+
+void showVacuum() {
+  lcd.setCursor(0,0); lcd.print(" VACUUM MODE   ");
+  lcd.setCursor(0,1); lcd.print("Relay: ");
+  lcd.print(vacuumRelayState ? "ON " : "OFF");
+}
+
+void showSetPressure() {
+  lcd.setCursor(0,0); lcd.print(" SET PRESSURE  ");
+  lcd.setCursor(0,1); lcd.print("Set: ");
+  lcd.print(setPressure);
+  lcd.print(" mbar");
+}
+
+void showMonitor() {
+  lcd.setCursor(0,0); lcd.print("PRESSURE CTRL ");
+  lcd.setCursor(0,1); lcd.print("Set:           ");
+  lcd.setCursor(0,2); lcd.print("Act:           ");
+  refreshMonitor();
+}
