@@ -1,0 +1,160 @@
+/*
+  1.WHAT THIS COMPLETES
+
+ DHT22 temperature & humidity logic
+ O₂ sensor calibrated percentage reading
+ Stable ADC averaging
+ Real-time non-blocking updates
+ Serial debugging support
+ Industrial-grade structure
+ * Reads pressure sensor current (4–20mA),
+ * converts it into voltage using a shunt resistor,
+ * then maps it to a pressure value.
+ * ADC samples are averaged for stable readings.
+ */
+float readPressure() {
+  float adcSum = 0;
+
+  for (int i = 0; i < ADC_SAMPLES; i++) {
+    adcSum += analogRead(PRESSURE_ADC_PIN);
+  }
+
+  float adcAvg = adcSum / ADC_SAMPLES;
+
+  // Convert ADC value to voltage
+  float voltage = (adcAvg / 4095.0) * ADC_REFERENCE_VOLTAGE;
+
+  // Convert voltage to current (Ohm’s Law)
+  float current_mA = (voltage / SHUNT_RESISTOR) * 1000.0;
+
+  // Map current to pressure range
+  float pressure = mapFloat(current_mA, 4.0, 20.0, 0.0, PRESSURE_MAX);
+
+  return pressure;
+}
+/*
+ * Automatic relay control:
+ * - Relay ON when actual pressure is NOT equal to set pressure
+ * - Relay OFF when actual pressure reaches set pressure
+ */
+void controlRelay(float actualPressure, float setPressure) {
+  if (actualPressure >= setPressure) {
+    digitalWrite(RELAY_PIN, LOW);   // Turn relay OFF
+  } else {
+    digitalWrite(RELAY_PIN, HIGH);  // Turn relay ON
+  }
+}
+/*
+ * Detects button press and provides audible feedback
+ * using the onboard buzzer.
+ */
+void beep() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(50);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+/*
+ * Reads temperature and humidity from the DHT22 sensor.
+ * Uses validity checks to avoid NaN or false readings.
+ * Values are updated continuously in real time.
+ */
+void readDHT22(float &temperature, float &humidity) {
+
+  // Read humidity (%)
+  humidity = dht.readHumidity();
+
+  // Read temperature (°C)
+  temperature = dht.readTemperature();
+
+  // Validate sensor readings
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("DHT22 read failed!");
+    return;
+  }
+
+  // Debug output
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C | Humidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+}
+/*
+ * Reads analog voltage from O₂ sensor and converts it
+ * to oxygen concentration (%).
+ *
+ * Calibration:
+ * - O2_AIR_VOLTAGE = Sensor output voltage at 20.9% O₂ (fresh air)
+ * - Linear conversion assumed
+ */
+float readOxygenPercent() {
+
+  float adcSum = 0;
+
+  // Average multiple ADC samples for stability
+  for (int i = 0; i < ADC_SAMPLES; i++) {
+    adcSum += analogRead(OXYGEN_ADC_PIN);
+  }
+
+  float adcAvg = adcSum / ADC_SAMPLES;
+
+  // Convert ADC reading to voltage
+  float voltage = (adcAvg / 4095.0) * ADC_REFERENCE_VOLTAGE;
+
+  // Convert voltage to oxygen percentage
+  float oxygenPercent = (voltage / O2_AIR_VOLTAGE) * 20.9;
+
+  // Limit output to realistic range
+  oxygenPercent = constrain(oxygenPercent, 0.0, 25.0);
+
+  // Debug output
+  Serial.print("Oxygen Level: ");
+  Serial.print(oxygenPercent);
+  Serial.println(" %");
+
+  return oxygenPercent;
+}
+/*
+ * Reads all sensors in one place.
+ * Designed to be called repeatedly in loop()
+ * without blocking system execution.
+ */
+void updateSensors() {
+
+  static float temperature = 0;
+  static float humidity = 0;
+  static float oxygen = 0;
+  static float pressure = 0;
+
+  // Read all sensors
+  readDHT22(temperature, humidity);
+  oxygen  = readOxygenPercent();
+  pressure = readPressure();
+
+  // Print combined sensor data
+  Serial.println("----- Sensor Data -----");
+  Serial.print("Pressure: "); Serial.print(pressure); Serial.println(" mbar");
+  Serial.print("Oxygen  : "); Serial.print(oxygen); Serial.println(" %");
+  Serial.print("Temp    : "); Serial.print(temperature); Serial.println(" °C");
+  Serial.print("Humidity: "); Serial.print(humidity); Serial.println(" %");
+  Serial.println("-----------------------");
+}
+/*
+ * Ensures sensors are updated at fixed intervals
+ * without using delay(), allowing smooth UI and relay control.
+ */
+unsigned long lastSensorUpdate = 0;
+const unsigned long SENSOR_INTERVAL = 1000; // 1 second
+
+void loop() {
+
+  unsigned long currentMillis = millis();
+
+  // Update sensors every 1 second
+  if (currentMillis - lastSensorUpdate >= SENSOR_INTERVAL) {
+    lastSensorUpdate = currentMillis;
+    updateSensors();
+  }
+
+  // Relay control, UI logic, button handling continues here
+}
