@@ -1,8 +1,8 @@
 /*
- * Project Name : ESP32 Gas / Vacuum Chamber Controller
+ * Project Name: ESP32 Gas / Vacuum Chamber Controller
  * Author        : <chiranjee veer singh>
  * Platform      : Custom ESP32 Development Board
- * MCU          : ESP32-WROOM-32
+ * MCU           : ESP32-WROOM-32
  *
  * Description:
  * This project implements a complete gas/vacuum chamber control system
