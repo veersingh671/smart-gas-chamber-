@@ -16,6 +16,7 @@ The system continuously monitors **pressure, oxygen concentration, temperature, 
 * Provides **audible feedback** using an onboard buzzer
 * Uses **non-blocking firmware design** for smooth real-time operation
 * Supports **serial monitoring** for debugging and testing
+* Supports the SD card feature for data restoration from the last data if the power cut  
 
 ##  Hardware Highlights
 
@@ -29,7 +30,6 @@ The system continuously monitors **pressure, oxygen concentration, temperature, 
 * Onboard buzzer for user feedback
 * Compact, standalone, and deployment-ready design
 
----
 
 ##  What You Learn From This Project
 
