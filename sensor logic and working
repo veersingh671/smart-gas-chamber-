@@ -158,3 +158,40 @@ void loop() {
 
   // Relay control, UI logic, button handling continues here
 }
+
+/*
+SD Card data logging  and data saved to the SD for data recovery 
+
+// SD CARD SAVE
+void saveSetPressureToSD() {
+  SD.remove("/setpressure.csv");                    // overwrite cleanly
+  File file = SD.open("/setpressure.csv", FILE_WRITE);
+  if (file) {
+    file.print("SetPressure,");
+    file.println(setPressure);
+    file.close();
+    Serial.println("Set pressure saved to SD card → setpressure.csv");
+  } else {
+    Serial.println("Failed to save to SD card");
+  }
+}
+
+void loadSetPressureFromSD() {
+  if (SD.exists("/setpressure.csv")) {
+    File file = SD.open("/setpressure.csv", FILE_READ);
+    if (file) {
+      String line = file.readStringUntil('\n');
+      file.close();
+
+      int commaPos = line.indexOf(',');
+      String valStr = (commaPos != -1) ? line.substring(commaPos + 1) : line;
+      setPressure = constrain(valStr.toInt(), 0, 200);
+
+      Serial.print(" Restored last set pressure from SD card: ");
+      Serial.print(setPressure);
+      Serial.println(" mbar");
+    }
+  } else {
+    Serial.println("No previous set pressure found on SD card → starting with 0");
+  }
+}
