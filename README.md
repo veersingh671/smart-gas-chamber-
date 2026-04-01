@@ -1,7 +1,8 @@
 # ESP32 Gas / Vacuum Chamber Controller
 
 ##  Project Overview
-This project is a **custom ESP32-based gas/vacuum chamber control system** built on a fully custom-designed development board. The board integrates power regulation, relay control, and sensor interfaces, making it a **standalone, industrial-ready solution** for real-time environmental monitoring and control.
+This project is a **custom ESP32-based gas/vacuum chamber control system** built on a fully custom-designed development board. The board integrates power regulation, relay control, and sensor interfaces, making it a standalone, industrial-ready solution** for real-time environmental monitoring and control.
+
 The system continuously monitors **pressure, oxygen concentration, temperature, and humidity** inside a chamber and automatically or manually controls external devices such as **vacuum pumps or gas valves**.
 
 ##  What This Project Does
@@ -16,7 +17,7 @@ The system continuously monitors **pressure, oxygen concentration, temperature, 
 * Provides **audible feedback** using an onboard buzzer
 * Uses **non-blocking firmware design** for smooth real-time operation
 * Supports **serial monitoring** for debugging and testing
-* Supports the SD card feature for data restoration from the last data if the power cut  
+* Supports the SD card feature for data restoration from the last data in case of a power cut  
 
 ##  Hardware Highlights
 
@@ -87,10 +88,13 @@ The system continuously monitors **pressure, oxygen concentration, temperature, 
 * Research and development setups
 * Embedded systems learning and prototyping
 
+##  Data logging using SD card  
+* SD card used for the data black box 
+* It can save the most recent reading, and if there is a power cut, it will recover it  and start the machine after some time at the same state
+*  data set update in .csv (EXCEL) format 
 
 ##  Future Improvements
 
-* Data logging to SD card
 * Wi-Fi or Bluetooth monitoring dashboard
 * Mobile or web-based UI
 * Alarm and safety shutdown logic
