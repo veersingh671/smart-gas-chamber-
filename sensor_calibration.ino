@@ -14,9 +14,7 @@
 #include <Adafruit_ADS1X15.h>
 #include <LuminOx.h>
 
-// ───────────────────────────────────────────────
 // PINS
-// ───────────────────────────────────────────────
 #define BTN_BACK        32
 #define BTN_UP          33
 #define BTN_DOWN        25
@@ -28,23 +26,14 @@
 // SD Card (HSPI)
 #define SD_CS_PIN       15
 SPIClass sdSPI(HSPI);
-
-// LCD
 LiquidCrystal_I2C lcd(0x27, 16, 4);
-
-// ADS1115
 Adafruit_ADS1115 ads;
-
-// LuminOx
 HardwareSerial SensorSerial(2);
 LuminOx ox(SensorSerial);
-
-// DHT
 DHT dht(DHTPIN, DHTTYPE);
 
-// ───────────────────────────────────────────────
 // PRESSURE CALIBRATION (your values)
-// ───────────────────────────────────────────────
+
 const float SHUNT_RESISTOR    = 120.0;
 const float ZERO_CURRENT_MA   = 5.99;
 const float FULL_SCALE_MA     = 20.0;
@@ -57,9 +46,8 @@ float pressureBuffer[FILTER_WINDOW];
 int bufferPos = 0;
 bool bufferFull = false;
 
-// ───────────────────────────────────────────────
+
 // VARIABLES
-// ───────────────────────────────────────────────
 int setPressure_mbar = 0;      // whole number
 int actualPressure_mbar = 0;
 float oxygen = 20.9;
@@ -71,16 +59,15 @@ unsigned long lastDHTRead = 0;
 
 bool lastBACK = HIGH, lastUP = HIGH, lastDOWN = HIGH;
 
-// ───────────────────────────────────────────────
+
 // HELPERS
-// ───────────────────────────────────────────────
 void beep() {
   digitalWrite(BUZZER_PIN, HIGH);
   delayMicroseconds(30000);
   digitalWrite(BUZZER_PIN, LOW);
 }
 
-// ── Pressure with ADS1115 ───────────────────────
+//  Pressure with ADS1115 
 float readAverageVoltage() {
   long sum = 0;
   for (int i = 0; i < ADC_SAMPLES; i++) {
@@ -118,7 +105,7 @@ int readPressure_mbar() {
   return (int)(avg_kPa * 10.0 + 0.5);   // round to nearest whole mbar
 }
 
-// ── SD Card Functions (unchanged) ───────────────
+// SD Card Functions (unchanged) 
 void saveSetPressureToSD() {
   SD.remove("/setpressure.csv");
   File file = SD.open("/setpressure.csv", FILE_WRITE);
@@ -146,7 +133,7 @@ void loadSetPressureFromSD() {
   }
 }
 
-// ── LCD Functions ───────────────────────────────
+//  LCD Functions
 void showMain() {
   lcd.clear();
   lcd.setCursor(0, 0); lcd.print("PRESSURE CTRL   ");
@@ -178,7 +165,7 @@ void refreshMain() {
   lcd.print("%  ");
 }
 
-// ── Sensors ─────────────────────────────────────
+// Sensors 
 void readSensors() {
   // LuminOx Oxygen
   LuminOxReading r;
@@ -191,7 +178,7 @@ void readSensors() {
   if (!isnan(h)) humidity = h;
 }
 
-// ── Serial Status ───────────────────────────────
+//Serial Status
 void printSerialStatus() {
   Serial.print("Set: "); Serial.print(setPressure_mbar);
   Serial.print(" mbar | Act: "); Serial.print(actualPressure_mbar);
@@ -254,9 +241,6 @@ void handleSerialCommands() {
   }
 }
 
-// ───────────────────────────────────────────────
-// SETUP
-// ───────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -273,13 +257,10 @@ void setup() {
   lcd.init();
   lcd.backlight();
 
-  // ADS1115
   if (!ads.begin()) {
     Serial.println("ADS1115 not found!");
   }
   ads.setGain(GAIN_ONE);
-
-  // LuminOx
   SensorSerial.begin(9600, SERIAL_8N1, 16, 17);
   ox.setDebug(false);
   ox.begin();
@@ -287,7 +268,6 @@ void setup() {
   dht.begin();
   analogReadResolution(12);   // not used now but kept for safety
 
-  // SD Card
   sdSPI.begin(14, 12, 13);
   if (SD.begin(SD_CS_PIN, sdSPI)) {
     Serial.println("SD Card OK");
@@ -303,9 +283,7 @@ void setup() {
   refreshMain();
 }
 
-// ───────────────────────────────────────────────
-// LOOP
-// ───────────────────────────────────────────────
+
 void loop() {
   readButtons();
   handleSerialCommands();
