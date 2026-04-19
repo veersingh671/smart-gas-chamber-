@@ -2,8 +2,9 @@
   SMART CHAMBER - Single Screen Controller (ADS1115 + LuminOx)
   - Pressure: ADS1115 + 4-20mA sensor → shown as whole mbar only
   - Oxygen: LuminOx optical sensor
-  - SD card saves/restores the last set pressure
+  - SD card saves/restores the last set pressure for backup data loss due to the power cut 
   - Automatic pressure maintenance (relay turns back ON if pressure drops)
+  - enhance the logic for the pressure sensor for stable reading (+-1) tolerance 
 */
 
 #include <Wire.h>
